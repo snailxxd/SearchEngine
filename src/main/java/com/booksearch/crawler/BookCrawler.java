@@ -1,26 +1,30 @@
 package com.booksearch.crawler;
 
 import com.booksearch.model.Book;
+import static com.booksearch.util.BookSerializer.*;
+import static com.booksearch.util.Constants.*;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
+import java.io.File;
+import java.io.IOException;
+import java.io.PrintStream;
 import java.lang.reflect.Type;
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class BookCrawler {
     private static final Gson GSON = new Gson();
+    private static final String BASE_URL = "https:";
 
     private static class DetailItem {
         String title;
         String content;
     }
+
     /**
      * 抓取网页 html 文档
      * @param url 要抓取的网页 url
@@ -210,7 +214,15 @@ public class BookCrawler {
                 case "出版社" -> book.setPublisher(entry.getValue());
                 case "作者" -> book.setAuthor(entry.getValue());
                 case "出版时间" -> {
-                    LocalDate localDate = LocalDate.parse(entry.getValue());
+                    String dateText = entry.getValue().trim();
+                    if (dateText.length() > 10 && dateText.charAt(10) == ' ') {
+                        dateText = dateText.substring(0, 10);
+                    } else if (dateText.length() == 7) {
+                        dateText = dateText.concat("-01");
+                    } else {
+                        continue;
+                    }
+                    LocalDate localDate = LocalDate.parse(dateText);
                     book.setPublicationDate(localDate);
                 }
                 case "正文语种" -> book.setLanguage(entry.getValue());
@@ -231,14 +243,96 @@ public class BookCrawler {
      */
     public static List<Book> getBooks(List<String> urlList) {
         List<Book> books = new ArrayList<>();
-        for (String url : urlList) {
+        int total = urlList.size();
+        int barLength = 50;
+
+        for (int i = 0; i < total; i++) {
+            String url = urlList.get(i);
             Book book = getBook(url);
             books.add(book);
+
+            int completed = i + 1;
+            double progress = (double) completed / total;
+            int percent = (int) (progress * 100);
+            int filledLength = (int) (progress * barLength);
+
+            // 打印爬取进度
+            String bar = "#".repeat(filledLength)
+                    + "-".repeat(barLength - filledLength);
+            PrintStream out = System.out;
+            out.print("\r[" + bar + "] " + percent + "% (" + completed + "/" + total + ")");
+            out.flush();
         }
+        System.out.println();
         return books;
     }
 
-    public static void main(String[] args) {
+    /**
+     * 从分类页面提取出图书 url，并控制爬取的页数
+     * @param url 分类页面的基础 url
+     * @param maxPages 最大爬取页数
+     * @return 图书 url 列表
+     */
+    public static List<String> getURLs(String url, int maxPages) {
+        List<String> urls = new ArrayList<>();
+        if (maxPages < 1) {
+            return urls;
+        }
 
+        for (int pageNo = 1; pageNo <= maxPages; pageNo++) {
+            String currentUrl;
+            if (pageNo == 1) {
+                currentUrl = url;
+            } else {
+                currentUrl = url + "&pageNo=" + pageNo;
+            }
+
+            Document doc = getDoc(currentUrl);
+            if (doc == null) {
+                continue;
+            }
+
+            Elements productElements = doc.select("ul.shop-search-items-img-type li.product");
+            if (productElements.isEmpty()) {
+                return urls;
+            }
+            for (Element productElement : productElements) {
+                Element link = productElement.selectFirst(".product-image a");
+                if (link != null) {
+                    String relativeUrl = link.attr("href");
+                    if (relativeUrl.startsWith("//")) {
+                        relativeUrl = BASE_URL + relativeUrl;
+                    }
+                    urls.add(relativeUrl);
+                }
+            }
+        }
+        return urls;
+    }
+
+    public static void main(String[] args) {
+        List<String> totalUrlList = new ArrayList<>();
+        for (Map.Entry<String, String> entry : CATEGORIES.entrySet()) {
+            String categoryName = entry.getKey();
+            String categoryId = entry.getValue();
+            String currentUrl = "https://search.xhsd.com/search?frontCategoryId=" + categoryId;
+
+            System.out.println("\n正在爬取 " + categoryName + " 类图书 url...");
+            List<String> currentUrlList = getURLs(currentUrl, MAX_PAGES);
+            System.out.println("爬取到 " + categoryName + " 类图书 url 共 " + currentUrlList.size() + " 条");
+            totalUrlList.addAll(currentUrlList);
+        }
+
+        System.out.println("\n正在爬取图书信息...");
+        List<Book> books = getBooks(totalUrlList);
+        System.out.println("爬取到图书信息共 " + books.size() + " 本");
+
+        try {
+            System.out.println("\n正在写入文件 " + FILE_PATH + " ...");
+            serializeAll(books, new File(FILE_PATH));
+            System.out.println("共写入 " + books.size() + " 本图书信息到 " + FILE_PATH);
+        } catch (IOException e) {
+            System.out.println("文件写入异常" + e);
+        }
     }
 }
