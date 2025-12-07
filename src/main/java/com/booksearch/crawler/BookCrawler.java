@@ -5,19 +5,28 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
-
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+import java.lang.reflect.Type;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 public class BookCrawler {
+    private static final Gson GSON = new Gson();
 
+    private static class DetailItem {
+        String title;
+        String content;
+    }
     /**
      * 抓取网页 html 文档
      * @param url 要抓取的网页 url
      * @return 抓取得到的 html 文档
      */
-    public static Document getDoc(String url) {
+    private static Document getDoc(String url) {
         Document doc = null;
         try {
             doc = Jsoup.connect(url).timeout(10000).get();
@@ -33,7 +42,7 @@ public class BookCrawler {
      * @param doc html 文档
      * @return 图书分类
      */
-    public static String extractCategory(Document doc) {
+    private static String extractCategory(Document doc) {
         Elements categoryLinks = doc.select("ol.breadcrumb a");
         if (categoryLinks.isEmpty()) {
             return "<UNK>";
@@ -51,7 +60,7 @@ public class BookCrawler {
      * @param doc html 文档
      * @return 图书标题
      */
-    public static String extractTitle(Document doc) {
+    private static String extractTitle(Document doc) {
         Element titleLink = doc.selectFirst("#js-item-name");
         if (titleLink == null) {
             return "<UNK>";
@@ -64,7 +73,7 @@ public class BookCrawler {
      * @param doc html 文档
      * @return 图书售价
      */
-    public static double extractSalePrice(Document doc) {
+    private static double extractSalePrice(Document doc) {
         Element priceLink = doc.selectFirst("#js-item-price");
         if (priceLink == null) {
             return 0;
@@ -78,7 +87,7 @@ public class BookCrawler {
      * @param doc html 文档
      * @return 图书原价
      */
-    public static double extractOriginalPrice(Document doc) {
+    private static double extractOriginalPrice(Document doc) {
         Element priceLink = doc.selectFirst("#js-item-originalPrice");
         if (priceLink == null) {
             return 0;
@@ -92,7 +101,7 @@ public class BookCrawler {
      * @param doc html 文档
      * @return 详细信息表格
      */
-    public static Map<String, String> extractTableData(Document doc) {
+    private static Map<String, String> extractTableData(Document doc) {
         Map<String, String> tableData = new LinkedHashMap<>();
 
         // 定位详细信息表格
@@ -119,6 +128,74 @@ public class BookCrawler {
         return tableData;
     }
 
+    private static String extractAndCleanContent(Document doc, String targetTitle) {
+        // 定位包含 data-detail 的元素
+        Element detailDiv = doc.selectFirst("div.spu-tab-item-detail");
+        if (detailDiv == null || !detailDiv.hasAttr("data-detail")) {
+            return "<UNK>";
+        }
+
+        String dataDetailJson = detailDiv.attr("data-detail");
+        try {
+            Type listType = new TypeToken<List<DetailItem>>() {}.getType();
+            List<DetailItem> details = GSON.fromJson(dataDetailJson, listType);
+            if (details == null) {
+                return "<UNK>";
+            }
+            for (DetailItem item : details) {
+                if (targetTitle.equals(item.title) && item.content != null) {
+                    // 将 content 视为新的 HTML 片段，使用 Jsoup 进行解析和清理
+                    return Jsoup.parse(item.content).text();
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("解析 data-detail 属性时出错：" + e.getMessage());
+            return "<UNK>";
+        }
+        return "<UNK>";
+    }
+
+    /**
+     * 从 html 中提取内容简介
+     * @param doc html 文档
+     * @return 图书内容简介
+     */
+    private static String extractContentSummary(Document doc) {
+        return extractAndCleanContent(doc, "内容简介");
+    }
+
+    /**
+     * 从 html 中提取作者简介
+     * @param doc html 文档
+     * @return 作者简介内容
+     */
+    private static String extractAuthorIntroduction(Document doc) {
+        return extractAndCleanContent(doc, "作者简介");
+    }
+
+    /**
+     * 从 html 中提取编辑推荐
+     * @param doc html 文档
+     * @return 编辑推荐内容
+     */
+    private static String extractEditorRecommendation(Document doc) {
+        return extractAndCleanContent(doc, "编辑推荐");
+    }
+
+    /**
+     * 从 html 中提取目录
+     * @param doc html 文档
+     * @return 目录
+     */
+    private static String extractContents(Document doc) {
+        return extractAndCleanContent(doc, "目录");
+    }
+
+    /**
+     * 从 url 爬取图书信息
+     * @param url 要爬取的图书页面链接
+     * @return 图书结构体
+     */
     public static Book getBook(String url) {
         Book book = new Book();
         Document doc = getDoc(url);
@@ -139,21 +216,29 @@ public class BookCrawler {
                 case "正文语种" -> book.setLanguage(entry.getValue());
             }
         }
+        book.setBookDescription(extractContentSummary(doc));
+        book.setAuthorDescription(extractAuthorIntroduction(doc));
+        book.setEditorRecommendation(extractEditorRecommendation(doc));
+        book.setContents(extractContents(doc));
 
         return book;
     }
 
-    public static void main(String[] args) {
-        String url = "https://item.xhsd.com/items/1010000103423030";
-        Document doc = getDoc(url);
-        Map<String, String> tableData = extractTableData(doc);
-        System.out.println(tableData);
-        double originalPrice = extractOriginalPrice(doc);
-        System.out.println(originalPrice);
-        double price = extractSalePrice(doc);
-        System.out.println(price);
-        System.out.println(extractTitle(doc));
-        System.out.println(extractCategory(doc));
+    /**
+     * 从 url 列表爬取一系列图书信息
+     * @param urlList 要爬取的图书页面链接列表
+     * @return 图书结构体列表
+     */
+    public static List<Book> getBooks(List<String> urlList) {
+        List<Book> books = new ArrayList<>();
+        for (String url : urlList) {
+            Book book = getBook(url);
+            books.add(book);
+        }
+        return books;
     }
 
+    public static void main(String[] args) {
+
+    }
 }
