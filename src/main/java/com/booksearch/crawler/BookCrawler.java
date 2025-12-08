@@ -3,6 +3,8 @@ package com.booksearch.crawler;
 import com.booksearch.model.Book;
 import static com.booksearch.util.BookSerializer.*;
 import static com.booksearch.util.Constants.*;
+import static com.booksearch.util.PrintProgressBar.printProgressBar;
+
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -11,7 +13,6 @@ import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import java.io.File;
 import java.io.IOException;
-import java.io.PrintStream;
 import java.lang.reflect.Type;
 import java.time.LocalDate;
 import java.util.*;
@@ -244,24 +245,12 @@ public class BookCrawler {
     public static List<Book> getBooks(List<String> urlList) {
         List<Book> books = new ArrayList<>();
         int total = urlList.size();
-        int barLength = 50;
 
         for (int i = 0; i < total; i++) {
             String url = urlList.get(i);
             Book book = getBook(url);
             books.add(book);
-
-            int completed = i + 1;
-            double progress = (double) completed / total;
-            int percent = (int) (progress * 100);
-            int filledLength = (int) (progress * barLength);
-
-            // 打印爬取进度
-            String bar = "#".repeat(filledLength)
-                    + "-".repeat(barLength - filledLength);
-            PrintStream out = System.out;
-            out.print("\r[" + bar + "] " + percent + "% (" + completed + "/" + total + ")");
-            out.flush();
+            printProgressBar(i+1, total);
         }
         System.out.println();
         return books;

@@ -5,7 +5,8 @@ import java.util.Map;
 
 public class Constants {
     public static final int MAX_PAGES = 10;
-    public static final String FILE_PATH = "D:\\Files\\Java\\hw\\hw1\\SearchEngine\\src\\data\\books.json";
+    public static final String FILE_PATH = "D:\\Files\\Java\\hw\\hw1\\SearchEngine\\data\\books.json";
+    public static final String INDEX_FILE_DIR = "D:\\Files\\Java\\hw\\hw1\\SearchEngine\\data\\index";
     public static final Map<String, String> CATEGORIES = new LinkedHashMap<>();
     static {
         CATEGORIES.put("人文社科", "34");
