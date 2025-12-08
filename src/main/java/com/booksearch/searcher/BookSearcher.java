@@ -62,10 +62,7 @@ public class BookSearcher {
      */
     public List<Book> search(String queryString, int limit) throws ParseException, IOException {
         MultiFieldQueryParser parser = new MultiFieldQueryParser(SEARCH_FIELDS, analyzer);
-
         Query query = parser.parse(queryString);
-        System.out.println("查询表达式: " + query.toString());
-
         TopDocs results = searcher.search(query, limit);
         ScoreDoc[] hits = results.scoreDocs;
         System.out.printf("找到 %d 个匹配项\n", results.totalHits.value);
