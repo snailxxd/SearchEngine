@@ -35,7 +35,7 @@ public class BookSearcher {
         try {
             books = deserializeAll(new File(FILE_PATH));
             isbnToBookMap = books.stream()
-                    .collect(Collectors.toMap(Book::getIsbn, book -> book, (a, b) -> a));
+                    .collect(Collectors.toMap(Book::getIsbn, book -> book, (a, _) -> a));
         } catch (Exception e) {
             throw new RuntimeException("初始化书籍数据失败", e);
         }
