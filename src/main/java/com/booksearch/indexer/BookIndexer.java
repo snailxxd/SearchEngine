@@ -14,13 +14,13 @@ import java.io.IOException;
 import java.nio.file.Paths;
 import java.time.ZoneOffset;
 
-public class IndexManager {
+public class BookIndexer {
     private final IndexWriter writer;
 
     /**
      * 初始化 IndexManager
      */
-    public IndexManager() throws IOException {
+    public BookIndexer() throws IOException {
         Directory dir = FSDirectory.open(Paths.get(INDEX_FILE_DIR));
         Analyzer analyzer = new SmartChineseAnalyzer();
         IndexWriterConfig iwc = new IndexWriterConfig(analyzer);
@@ -86,6 +86,6 @@ public class IndexManager {
      */
     public void close() throws IOException {
         writer.close();
-        System.out.println("索引构建完成，已写入磁盘。");
+        System.out.println("索引构建完成，已写入磁盘");
     }
 }

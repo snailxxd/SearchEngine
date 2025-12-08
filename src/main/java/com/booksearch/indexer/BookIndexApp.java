@@ -13,7 +13,7 @@ import java.util.List;
 public class BookIndexApp {
     public static void main(String[] args) {
         try {
-            IndexManager indexManager = new IndexManager();
+            BookIndexer bookIndexer = new BookIndexer();
 
             System.out.println("正在读取 Book 文件...");
             List<Book> books = deserializeAll(new File(FILE_PATH));
@@ -27,11 +27,12 @@ public class BookIndexApp {
             long startTime = System.currentTimeMillis();
             for (int i = 0; i < books.size(); i++) {
                 Book book = books.get(i);
-                indexManager.indexBook(book);
+                bookIndexer.indexBook(book);
                 printProgressBar(i+1, total);
             }
             long endTime = System.currentTimeMillis();
             System.out.printf("所有书籍索引完成。耗时: %.2f 秒\n", (endTime - startTime) / 1000.0);
+            bookIndexer.close();
         } catch (IOException e) {
             System.out.println("构建索引过程失败" + e);
         }
